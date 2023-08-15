@@ -14,7 +14,7 @@ def waveform_baseline(waveform, N):
     #     sample_sum += waveform[i]
     # return sample_sum/N
     if N>0: return np.average(waveform[0:N+1])
-    if N<0: return np.average(waveform[N-1])
+    if N<0: return np.average(waveform[N:])
 
 def pulse_charge(waveform, centers, width):
     # Find area (charge) in region center - width to center + width.
