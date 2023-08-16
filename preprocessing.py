@@ -97,33 +97,39 @@ def linear_interpolation(x0, y0, x1, y1):
     return a, b
 
 def CFD_timing_extrapolation(waveform, pulse_positions, percentage, start_rise_time=0.1, end_rise_time=0.9):
+    
     # Find pulse timing as a _percentage_ of rise-time amplitude. 
     # @params: _waveform_, _pulse_positions_, _percentage_ or rise-time amplitude
     # @params: optional _start_rise_time_ and _end_rise_time_ as percentages of pulse amplitude
     # @return: numpy array with
+
     CFD_samples = np.array([], dtype="int")
-    CFD_values  = np.array([], dtype="float")
-    points_i = np.array([], dtype="int")
-    points_y = np.array([], dtype="float")
+    
     for pulse in pulse_positions:
+
+        # Find max amplitude, and start and end of rise-time amplitude
         ymax    = waveform[pulse]
         y_start = start_rise_time*ymax
         y_end   = end_rise_time*ymax
-        points_y = np.append(points_y, [y_start], axis=None)
-        points_y = np.append(points_y, [y_end], axis=None)
+
+        # Find positions of start and end of rise time
         i_start = walk_backward(waveform, y_start, pulse)
         i_end   = walk_backward(waveform, y_end, pulse)
-        points_i = np.append(points_i, [i_start], axis=None)
-        points_i = np.append(points_i, [i_end], axis=None)
+
+        # Make linear interpolation between 
         a, b    = linear_interpolation(i_start, y_start, i_end, y_end)
-        rise_amplitude = (end_rise_time-start_rise_time)*ymax
-        CFD_time = (percentage*rise_amplitude-a)/b
-        CFD_samples = np.append(CFD_samples, [CFD_time], axis=None)
-        CFD_values  = np.append(CFD_values, a+b*CFD_time)
-        if np.isnan(CFD_time):
+
+        # If b be nan or inf, take i_start as timing
+        if np.isinf(b) or np.isnan(b):
             CFD_samples = np.append(CFD_samples, [i_start], axis=None)
-            CFD_values  = np.append(CFD_values, 0.)
-    return CFD_samples, CFD_values
+
+        # Otherwise, apply extrapolation through the baseline
+        else: 
+            rise_amplitude = (end_rise_time-start_rise_time)*ymax
+            CFD_time = (percentage*rise_amplitude-a)/b
+            CFD_samples = np.append(CFD_samples, [CFD_time], axis=None)
+
+    return CFD_samples
 
 def main():
     
@@ -175,17 +181,22 @@ def main():
                 waveform = waveforms[channels[channel_index]][k]
                 if len(waveform) > 0:
                     
-                    baseline = waveform_baseline(waveform, 20)
+                    baseline = waveform_baseline(waveform, -20)
                     waveform -= baseline
                     pulse  = find_pulses(waveform, -1.*threshold)
                     charge = pulse_charge(waveform, pulse, 5)
                     amp    = pulse_amplitude(waveform, pulse)
                     
-                    pulse_sci, _ = find_peaks(-1.*waveform, height=-1.*threshold)
+                    pulse_sci, _ = find_peaks(-1.*waveform, height=threshold)
                     charge_sci   = pulse_charge(waveform, pulse_sci, 5)
                     amp_sci      = pulse_amplitude(waveform, pulse_sci)
 
-                    CFD_times, CFD_values = CFD_timing_extrapolation(waveform, pulse_sci, 0., 0.4, 0.8)
+                    CFD_times = CFD_timing_extrapolation(waveform, pulse_sci, 0., 0.4, 0.8)
+
+                    # print("\n")
+                    # print(k) 
+                    # print(pulse_sci) 
+                    # print(CFD_times)
 
                     baselines[k][channel_number] = baseline
                     count[k][channel_number] = len(pulse)
