@@ -16,6 +16,8 @@ Explaining the plot:
 * Blue crosses: Start and end of rise time being considered for timing determination.
 * Red crosses: Timing of the pulse as the extrapolated line crosses the baseline.
 
+![Waveform with pulse timing determined by CFD. Red crosses represent timing of  pulse.](./TOF_waveform-5.png)
+
 Basic algorithm:
 * Find the position and amplitude of a pulse.
 * Determine rise time.
