@@ -9,10 +9,6 @@ def waveform_baseline(waveform, N):
     # Find baseline of waveform using the first N samples.
     # @parameters: waveform and N
     # @return    : average of the first N samples
-    # sample_sum =0.
-    # for i in range(0, N):
-    #     sample_sum += waveform[i]
-    # return sample_sum/N
     if N>0: return np.average(waveform[0:N+1])
     if N<0: return np.average(waveform[N:])
 
@@ -32,17 +28,22 @@ def pulse_charge(waveform, centers, width):
     return charges
 
 def pulse_amplitude(waveform, pulses):
+    # Find the amplitude of each entry in pulses
+    # @params: _waveform_ values and positions of minima in _pulses_
+    # @return: numpy array with _waveform_[_pulses_[:]]
     amps = np.array([], dtype="float")
     for pulse in pulses: amps = np.append(amps, [waveform[pulse]], axis=None)
     return amps
+    # Future: return np.array([waveform[pulse] for pulse in pulses])
 
 def find_pulses(waveform, threshold):
-    
+    # PMT Test Facilities (PTF) algorithm to find pulses above _threshold_ in a waveform
+    # @params: _waveform_ values and _threhsold_ value
+    # @return: position of pulses in the waveform
     ymin = 99999999.
     imin = 0
     inside_pulse = False 
     pulses = np.array([], dtype="int")
-
     for k in range(0, len(waveform)):
         if (waveform[k] < ymin):
             ymin = waveform[k]
@@ -54,18 +55,20 @@ def find_pulses(waveform, threshold):
             pulses = np.append(pulses, [imin], axis=None)
             imin = 0
             ymin = 99999999.
-
     return pulses
 
 def get_run_number(root_file_path):
+    # Split path of files named "root_run_XXXXXX.root" to find XXXXXX
+    # @params: _root_file_path_ containing the Linux/Mac path to the root file
+    # @return: string with XXXXXX
     split1 = root_file_path.split("_")
     run_number = split1[-1].replace(".root","")
     return run_number
 
 def walk_forward(waveform, reference):
-    ## Walk forward on the _waveform_ samples.
-    # Finds first sample _j_ below _reference_ values.
-    # Returns sample number _j-1_.
+    # Walk forward on the _waveform_ samples to find sample _j_ below _reference_ value
+    # @params: _waveform_ values and _reference_ value
+    # @return: _j_ or 10000 if exception occur
     try:
         sample_value = waveform[0]
         j = 0
@@ -77,32 +80,50 @@ def walk_forward(waveform, reference):
         return 10000
 
 def walk_backward(waveform, reference, start_point):
+    # Walk forward on the _waveform_ samples to find sample _j_ below _reference_ value
+    # @params: _waveform_ values and _reference_ value
+    # @return: _j_
     j = start_point
     while ((waveform[j] < reference) and (j > 0)):
         j -= 1
     return j+1
 
 def linear_interpolation(x0, y0, x1, y1):
-    ## Find the linear _a_ and angular _b_ parameters.
-    # Provide initial (_x0_,_y0) and final (_x1_, _y1_) coordiantes.
-    # Returns _a_ and _b_. 
+    # Find the linear _a_ and angular _b_ parameters
+    # @params: Initial (_x0_,_y0) and final (_x1_, _y1_) coordinates
+    # @return: _a_ and _b_
     b = (y1-y0)/(x1-x0)
     a = y0-x0*b
     return a, b
 
-def CFD_timing(waveform, pulses):
-
-    CFD_time = np.array([],dtype="int")
-    for pulse in pulses:
-        rise_amplitude = (end_rise-start_rise)*ymax00
-        y_end = end_rise*ymax00
-        i_end = walk_backward(waveform[0:imax00_global+1],y_end,imax00_global)
-        y_start = start_rise*ymax00
-        i_start = walk_backward(waveform[0:imax00_global+1],y_start,imax00_global)
-        a, b = linear_interpolation(i_start, y_start, i_end, y_end)
-        imax00_CFD = (percentage*rise_amplitude-a)/b
-    return imax00_CFD
-    # if np.isnan(imax00_CFD):
+def CFD_timing_extrapolation(waveform, pulse_positions, percentage, start_rise_time=0.1, end_rise_time=0.9):
+    # Find pulse timing as a _percentage_ of rise-time amplitude. 
+    # @params: _waveform_, _pulse_positions_, _percentage_ or rise-time amplitude
+    # @params: optional _start_rise_time_ and _end_rise_time_ as percentages of pulse amplitude
+    # @return: numpy array with
+    CFD_samples = np.array([], dtype="int")
+    CFD_values  = np.array([], dtype="float")
+    points_i = np.array([], dtype="int")
+    points_y = np.array([], dtype="float")
+    for pulse in pulse_positions:
+        ymax    = waveform[pulse]
+        y_start = start_rise_time*ymax
+        y_end   = end_rise_time*ymax
+        points_y = np.append(points_y, [y_start], axis=None)
+        points_y = np.append(points_y, [y_end], axis=None)
+        i_start = walk_backward(waveform, y_start, pulse)
+        i_end   = walk_backward(waveform, y_end, pulse)
+        points_i = np.append(points_i, [i_start], axis=None)
+        points_i = np.append(points_i, [i_end], axis=None)
+        a, b    = linear_interpolation(i_start, y_start, i_end, y_end)
+        rise_amplitude = (end_rise_time-start_rise_time)*ymax
+        CFD_time = (percentage*rise_amplitude-a)/b
+        CFD_samples = np.append(CFD_samples, [CFD_time], axis=None)
+        CFD_values  = np.append(CFD_values, a+b*CFD_time)
+        if np.isnan(CFD_time):
+            CFD_samples = np.append(CFD_samples, [i_start], axis=None)
+            CFD_values  = np.append(CFD_values, 0.)
+    return CFD_samples, CFD_values
 
 def main():
     branches = ["midas_data_D300", "midas_data_D301", "midas_data_D302"]
