@@ -126,19 +126,21 @@ def CFD_timing_extrapolation(waveform, pulse_positions, percentage, start_rise_t
     return CFD_samples, CFD_values
 
 def main():
+    
+    # Branches, channels and file to analyze
     branches = ["midas_data_D300", "midas_data_D301", "midas_data_D302"]
     channels = [f"Channel{i}" for i in range(0,8)]
     root_file_path = sys.argv[1]
-    output_folder_path = "../analysis_files_scipy"
+    
+    # Output npz file
     run_number = get_run_number(root_file_path)
+    output_folder_path = "."
+    final_file = f"{output_folder_path}/pulse_information-{run_number}"
 
-    # Unit transformation
+    # Set threshold
     V_per_unit = 1./16384.*2.*1.e3
     threshold = 20. #mV
     threshold = threshold/V_per_unit
-
-    # Output file: Open
-    final_file = f"{output_folder_path}/pulse_information-{run_number}"
 
     # Get number of entries 
     entries = []
@@ -183,7 +185,7 @@ def main():
                     charge_sci   = pulse_charge(waveform, pulse_sci, 5)
                     amp_sci      = pulse_amplitude(waveform, pulse_sci)
 
-                    CFD_times, CFD_values = CFD_timing_extrapolation(event_number, waveform, pulse_sci, 0., 0.4, 0.8)
+                    CFD_times, CFD_values = CFD_timing_extrapolation(waveform, pulse_sci, 0., 0.4, 0.8)
 
                     baselines[k][channel_number] = baseline
                     count[k][channel_number] = len(pulse)
@@ -213,11 +215,11 @@ def main():
                         if (k==len(waveforms[channels[channel_index]])-1):
                             print(f"Analyzing {channel_number}: ", k+1, "/", len(waveforms[channels[channel_index]]), end="\n")
     
+    # Output data to compressed files
     print("Saving data to numpy file...")
     np.savez_compressed(f"{final_file}", baseline=baselines, event_number=event_number, count=count, pulse=pulses, charge=charges, amplitude=amps)
     np.savez_compressed(f"{final_file}_scipy", baseline=baselines, event_number=event_number, count_scipy=count_scipy, pulse_scipy=pulses_scipy, CFD_timing=CFD_timing, charge_scipy=charges_scipy, amp_scipy=amps_scipy)
-
-    print("Pulse information saved to: ", final_file)
+    print(f"Pulse information saved to: {final_file}.npz")
 
 if __name__ == "__main__":
     main()
