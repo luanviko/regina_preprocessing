@@ -81,8 +81,8 @@ def walk_forward(waveform, reference):
 
 def walk_backward(waveform, reference, start_point):
     # Walk forward on the _waveform_ samples to find sample _j_ below _reference_ value
-    # @params: _waveform_ values and _reference_ value
-    # @return: _j_
+    # @params: _waveform_ values, _reference_ threshold value and _start_point_
+    # @return: _j+1_ from where the waveform crosses _reference_
     j = start_point
     while ((waveform[j] < reference) and (j > 0)):
         j -= 1
