@@ -154,6 +154,7 @@ def main():
     pulses       = np.empty((entries[0], 32, max_pulses), dtype="int")
     charges      = np.empty((entries[0], 32, max_pulses), dtype="float")
     amps         = np.empty((entries[0], 32, max_pulses), dtype="float")
+    CFD_timing   = np.empty((entries[0], 32, max_pulses), dtype="float")
     pulses_scipy  = np.empty((entries[0], 32, max_pulses), dtype="int")
     charges_scipy = np.empty((entries[0], 32, max_pulses), dtype="float")
     amps_scipy    = np.empty((entries[0], 32, max_pulses), dtype="float")
@@ -182,6 +183,8 @@ def main():
                     charge_sci   = pulse_charge(waveform, pulse_sci, 5)
                     amp_sci      = pulse_amplitude(waveform, pulse_sci)
 
+                    CFD_times, CFD_values = CFD_timing_extrapolation(event_number, waveform, pulse_sci, 0., 0.4, 0.8)
+
                     baselines[k][channel_number] = baseline
                     count[k][channel_number] = len(pulse)
                     event_number[k] = waveforms["eventNumber"][k]
@@ -202,6 +205,7 @@ def main():
                         pulses_scipy[k][channel_number][l] = int(pulse_sci[l])
                         charges_scipy[k][channel_number][l] = float(charge_sci[l])
                         amps_scipy[k][channel_number][l] = float(amp_sci[l])
+                        CFD_timing[k][channel_number][l] = float(CFD_times[l])
 
                     if k%100==0:
                         print(f"Analyzing {channel_number}: ", k, "/", len(waveforms[channels[channel_index]]), end="\r")
@@ -211,7 +215,7 @@ def main():
     
     print("Saving data to numpy file...")
     np.savez_compressed(f"{final_file}", baseline=baselines, event_number=event_number, count=count, pulse=pulses, charge=charges, amplitude=amps)
-    np.savez_compressed(f"{final_file}_scipy", baseline=baselines, event_number=event_number, count_scipy=count_scipy, pulse_scipy=pulses_scipy, charge_scipy=charges_scipy, amp_scipy=amps_scipy)
+    np.savez_compressed(f"{final_file}_scipy", baseline=baselines, event_number=event_number, count_scipy=count_scipy, pulse_scipy=pulses_scipy, CFD_timing=CFD_timing, charge_scipy=charges_scipy, amp_scipy=amps_scipy)
 
     print("Pulse information saved to: ", final_file)
 
