@@ -4,9 +4,9 @@
 
 Basic nomenclature:
 * **Baseline:** Average of N samples at the start or end of a waveform.
-* **Pulse position:** Sample with minimum of pulse.
+* **Pulse position:** Sample with pulse minimum.
 * **Pulse amplitude:** Distance from pulse minimum to baseline.
-* **Pulse charge:** Sum of sample amplitude times sample sum over a width around pulse position.
+* **Pulse charge:** Sum of sample amplitude times sample time over a width around pulse position.
 * **Rise time:** Linear portion of pulse, the distance between 10% to 90% of pulse amplitude.
 * **Pulse timing:** Sample where the pulse starts (CFD algorithm) or reaches max. amplitude (STT algorithm). 
 
