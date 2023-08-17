@@ -141,7 +141,7 @@ def main():
             # Loop over every channel in every branch
             channel_number = channel_index+8*branch_index
             print(f"Analyzing channel {channel_number}:", end="\r")
-            for k in range(0, int(0.001*entries[branch_index])):
+            for k in range(0, int(1.*entries[branch_index])):
                 waveform = waveforms[channels[channel_index]][k]
                 if len(waveform) > 0:
                     
