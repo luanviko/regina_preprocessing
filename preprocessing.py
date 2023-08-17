@@ -36,27 +36,6 @@ def pulse_amplitude(waveform, pulses):
     return amps
     # Future: return np.array([waveform[pulse] for pulse in pulses])
 
-def find_pulses(waveform, threshold):
-    # PMT Test Facilities (PTF) algorithm to find pulses above _threshold_ in a waveform
-    # @params: _waveform_ values and _threhsold_ value
-    # @return: position of pulses in the waveform
-    ymin = 99999999.
-    imin = 0
-    inside_pulse = False 
-    pulses = np.array([], dtype="int")
-    for k in range(0, len(waveform)):
-        if (waveform[k] < ymin):
-            ymin = waveform[k]
-            imin = k 
-        if ((waveform[k] < threshold) and (not inside_pulse) ):
-            inside_pulse = True
-        if ((waveform[k] >= threshold) and inside_pulse):
-            inside_pulse = False
-            pulses = np.append(pulses, [imin], axis=None)
-            imin = 0
-            ymin = 99999999.
-    return pulses
-
 def get_run_number(root_file_path):
     # Split path of files named "root_run_XXXXXX.root" to find XXXXXX
     # @params: _root_file_path_ containing the Linux/Mac path to the root file
@@ -64,20 +43,6 @@ def get_run_number(root_file_path):
     split1 = root_file_path.split("_")
     run_number = split1[-1].replace(".root","")
     return run_number
-
-def walk_forward(waveform, reference):
-    # Walk forward on the _waveform_ samples to find sample _j_ below _reference_ value
-    # @params: _waveform_ values and _reference_ value
-    # @return: _j_ or 10000 if exception occur
-    try:
-        sample_value = waveform[0]
-        j = 0
-        while ((sample_value > reference) and (j < len(waveform)-1)):
-            j += 1
-            sample_value = waveform[j]
-        return j-1
-    except IndexError:
-        return 10000
 
 def walk_backward(waveform, reference, start_point):
     # Walk forward on the _waveform_ samples to find sample _j_ below _reference_ value
@@ -137,6 +102,7 @@ def main():
     branches = ["midas_data_D300", "midas_data_D301", "midas_data_D302"]
     channels = [f"Channel{i}" for i in range(0,8)]
     root_file_path = sys.argv[1]
+    total_channels = int(len(branches)*len(channels))
     
     # Output npz file
     run_number = get_run_number(root_file_path)
@@ -154,19 +120,16 @@ def main():
         with uproot.open(root_file_path) as root_file:
             entries.append(root_file[branches[branch_index]].num_entries)
 
-    # Output arrays
-    max_pulses = 100
-    baselines    = np.empty((entries[0], 32), dtype="float")
-    event_number = np.empty((entries[0]), dtype="int")    
-    count        = np.empty((entries[0], 32), dtype="int")
-    pulses       = np.empty((entries[0], 32, max_pulses), dtype="int")
-    charges      = np.empty((entries[0], 32, max_pulses), dtype="float")
-    amps         = np.empty((entries[0], 32, max_pulses), dtype="float")
-    CFD_timing   = np.empty((entries[0], 32, max_pulses), dtype="float")
-    pulses_scipy  = np.empty((entries[0], 32, max_pulses), dtype="int")
-    charges_scipy = np.empty((entries[0], 32, max_pulses), dtype="float")
-    amps_scipy    = np.empty((entries[0], 32, max_pulses), dtype="float")
-    count_scipy   = np.empty((entries[0], 32), dtype="int")
+    # Output fixed-size arrays to be filled with a single value per waveform
+    baselines    = np.empty((entries[0], total_channels), dtype="float")
+    event_number = np.empty((entries[0], total_channels), dtype="int")
+    count        = np.empty((entries[0], total_channels), dtype="int")
+
+    # Output variable-size arrays to be filled multiple values per waveform
+    pulses     = np.ndarray(shape=(entries[0], total_channels), dtype="object")
+    charges    = np.ndarray(shape=(entries[0], total_channels), dtype="object")
+    amps       = np.ndarray(shape=(entries[0], total_channels), dtype="object")
+    CFD_timing = np.ndarray(shape=(entries[0], total_channels), dtype="object")
 
     # Start analysis
     print("Analyzing run: ", run_number)
@@ -175,51 +138,35 @@ def main():
             with uproot.open(root_file_path) as root_file:
                 waveforms = root_file[branches[branch_index]].arrays([channels[channel_index], "eventNumber"], library="np")
             
+            # Loop over every channel in every branch
             channel_number = channel_index+8*branch_index
             print(f"Analyzing channel {channel_number}:", end="\r")
-            for k in range(0, int(0.001*entries[branch_index])):
+            for k in range(0, int(1.*entries[branch_index])):
                 waveform = waveforms[channels[channel_index]][k]
                 if len(waveform) > 0:
                     
-                    baseline = waveform_baseline(waveform, -20)
+                    # Apply baseline correction
+                    baseline = waveform_baseline(waveform, -15)
                     waveform -= baseline
-                    pulse  = find_pulses(waveform, -1.*threshold)
-                    charge = pulse_charge(waveform, pulse, 5)
-                    amp    = pulse_amplitude(waveform, pulse)
                     
-                    pulse_sci, _ = find_peaks(-1.*waveform, height=threshold)
-                    charge_sci   = pulse_charge(waveform, pulse_sci, 5)
-                    amp_sci      = pulse_amplitude(waveform, pulse_sci)
+                    # Find pulse information
+                    pulse, _ = find_peaks(-1.*waveform, height=threshold)
+                    charge   = pulse_charge(waveform, pulse, 2)
+                    amp      = pulse_amplitude(waveform, pulse)
+                    CFD_times = CFD_timing_extrapolation(waveform, pulse, 0., 0.4, 0.8)
 
-                    CFD_times = CFD_timing_extrapolation(waveform, pulse_sci, 0., 0.4, 0.8)
-
-                    # print("\n")
-                    # print(k) 
-                    # print(pulse_sci) 
-                    # print(CFD_times)
-
+                    # Save fixed-size information
                     baselines[k][channel_number] = baseline
                     count[k][channel_number] = len(pulse)
                     event_number[k] = waveforms["eventNumber"][k]
                     
-                    if len(pulse) > max_pulses: to_store = max_pulses
-                    if len(pulse) <= max_pulses: to_store = len(pulse)
-                    for l in range(0, to_store): 
-                        # print("PTF: ", len(pulse), k, l, to_store, float(charge[l]))
-                        pulses[k][channel_number][l] = int(pulse[l])
-                        charges[k][channel_number][l] = float(charge[l])
-                        amps[k][channel_number][l] = float(amp[l])
+                    # Save variable-size information
+                    pulses[k][channel_number]     = pulse
+                    charges[k][channel_number]    = charge
+                    amps[k][channel_number]       = amp
+                    CFD_timing[k][channel_number] = CFD_times
 
-                    count_scipy[k][channel_number] = len(pulse_sci)
-                    if len(pulse_sci) > max_pulses: to_store = max_pulses
-                    if len(pulse_sci) <= max_pulses: to_store = len(pulse_sci)
-                    for l in range(0, to_store): 
-                        # print("Scipy: ", len(pulse_sci), k, l, to_store, float(charge_sci[l]))
-                        pulses_scipy[k][channel_number][l] = int(pulse_sci[l])
-                        charges_scipy[k][channel_number][l] = float(charge_sci[l])
-                        amps_scipy[k][channel_number][l] = float(amp_sci[l])
-                        CFD_timing[k][channel_number][l] = float(CFD_times[l])
-
+                    # Print progress on the screen
                     if k%100==0:
                         print(f"Analyzing {channel_number}: ", k, "/", len(waveforms[channels[channel_index]]), end="\r")
                     else:
@@ -228,8 +175,7 @@ def main():
     
     # Output data to compressed files
     print("Saving data to numpy file...")
-    np.savez_compressed(f"{final_file}", baseline=baselines, event_number=event_number, count=count, pulse=pulses, charge=charges, amplitude=amps)
-    np.savez_compressed(f"{final_file}_scipy", baseline=baselines, event_number=event_number, count_scipy=count_scipy, pulse_scipy=pulses_scipy, CFD_timing=CFD_timing, charge_scipy=charges_scipy, amp_scipy=amps_scipy)
+    np.savez_compressed(f"{final_file}", baseline=baselines, event_number=event_number, count=count, pulse=pulses, charge=charges, amplitude=amps, CFD_timing=CFD_timing)
     print(f"Pulse information saved to: {final_file}.npz")
 
 if __name__ == "__main__":
