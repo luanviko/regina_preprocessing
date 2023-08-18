@@ -1,9 +1,8 @@
+import uproot, sys, progressbar, warnings
+from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
 import numpy as np
-import uproot
 from array import array
-from scipy.signal import find_peaks
-import sys
 
 def waveform_baseline(waveform, N):
     # Find baseline of waveform using the first N samples.
@@ -97,6 +96,9 @@ def CFD_timing_extrapolation(waveform, pulse_positions, percentage, start_rise_t
     return CFD_samples
 
 def main():
+
+    # Comment this filter if debugging
+    warnings.simplefilter("ignore", category=RuntimeWarning)
     
     # Branches, channels and file to analyze
     branches = ["midas_data_D300", "midas_data_D301", "midas_data_D302"]
@@ -132,7 +134,6 @@ def main():
     CFD_timing = np.ndarray(shape=(entries[0], total_channels), dtype="object")
 
     # Start analysis
-    print("Analyzing run: ", run_number)
     for branch_index in np.arange(0, len(branches)):
         for channel_index in np.arange(len(channels)):
             with uproot.open(root_file_path) as root_file:
@@ -140,9 +141,12 @@ def main():
             
             # Loop over every channel in every branch
             channel_number = channel_index+8*branch_index
-            print(f"Analyzing channel {channel_number}:", end="\r")
+            widgets=[f'Run {run_number}. Channel {channel_number}. Preprocessing: ', progressbar.Percentage(), progressbar.Bar('\u2587', '|', '|'), ' ', progressbar.Timer()]
+            
+            bar = progressbar.ProgressBar(widgets=widgets, maxval=int(1.*entries[branch_index])).start()
             for k in range(0, int(1.*entries[branch_index])):
                 waveform = waveforms[channels[channel_index]][k]
+                bar.update(k)
                 if len(waveform) > 0:
                     
                     # Apply baseline correction
@@ -166,13 +170,6 @@ def main():
                     amps[k][channel_number]       = amp
                     CFD_timing[k][channel_number] = CFD_times
 
-                    # Print progress on the screen
-                    if k%100==0:
-                        print(f"Analyzing {channel_number}: ", k, "/", len(waveforms[channels[channel_index]]), end="\r")
-                    else:
-                        if (k==len(waveforms[channels[channel_index]])-1):
-                            print(f"Analyzing {channel_number}: ", k+1, "/", len(waveforms[channels[channel_index]]), end="\n")
-    
     # Output data to compressed files
     print("Saving data to numpy file...")
     np.savez_compressed(f"{final_file}", baseline=baselines, event_number=event_number, count=count, pulse=pulses, charge=charges, amplitude=amps, CFD_timing=CFD_timing)
