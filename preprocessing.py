@@ -95,6 +95,15 @@ def CFD_timing_extrapolation(waveform, pulse_positions, percentage, start_rise_t
 
     return CFD_samples
 
+def by_threshold(waveform, pulses, threshold):
+    by_threshold_timing = np.array([], dtype="int")
+    by_threshold_value  = np.array([], dtype="float")
+    for pulse in pulses:
+        i_threshold = walk_backward(waveform, threshold, pulse)
+        by_threshold_timing = np.append(by_threshold_timing, [i_threshold], axis=None)
+        by_threshold_value = np.append(by_threshold_value, [waveform[i_threshold]], axis=None)
+    return by_threshold_timing, by_threshold_value
+
 def main():
 
     # Comment this filter if debugging
@@ -132,6 +141,7 @@ def main():
     charges    = np.ndarray(shape=(entries[0], total_channels), dtype="object")
     amps       = np.ndarray(shape=(entries[0], total_channels), dtype="object")
     CFD_timing = np.ndarray(shape=(entries[0], total_channels), dtype="object")
+    threshold_timings = np.ndarray(shape=(entries[0], total_channels), dtype="object")
 
     # Start analysis
     for branch_index in np.arange(0, len(branches)):
@@ -158,6 +168,7 @@ def main():
                     charge   = pulse_charge(waveform, pulse, 2)
                     amp      = pulse_amplitude(waveform, pulse)
                     CFD_times = CFD_timing_extrapolation(waveform, pulse, 0., 0.4, 0.8)
+                    threshold_timing = by_threshold(waveform, pulse, -15)
 
                     # Save fixed-size information
                     baselines[k][channel_number] = baseline
@@ -169,10 +180,11 @@ def main():
                     charges[k][channel_number]    = charge
                     amps[k][channel_number]       = amp
                     CFD_timing[k][channel_number] = CFD_times
+                    threshold_timings[k][channel_number] = threshold_timing
 
     # Output data to compressed files
     print("Saving data to numpy file...")
-    np.savez_compressed(f"{final_file}", baseline=baselines, event_number=event_number, count=count, pulse=pulses, charge=charges, amplitude=amps, CFD_timing=CFD_timing)
+    np.savez_compressed(f"{final_file}", baseline=baselines, event_number=event_number, count=count, pulse=pulses, charge=charges, amplitude=amps, CFD_timing=CFD_timing, threshold_timing=threshold_timings)
     print(f"Pulse information saved to: {final_file}.npz")
 
 if __name__ == "__main__":
