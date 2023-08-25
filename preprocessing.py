@@ -127,6 +127,18 @@ def by_threshold(waveform, pulses, threshold):
         by_threshold_value = np.append(by_threshold_value, [waveform[i_threshold]], axis=None)
     return by_threshold_timing
 
+def to_root(file_name, data):
+    # Save data dictionary to a tree in a root file
+    # @params: _file_name_ with path to root file and _data_ dict.
+    print(f"Saving to: {file_name}.root")
+    with uproot.recreate(file_name+".root") as output_file:
+        output_file["pulse_information"] = data
+
+def to_npz(file_name, data):
+    # Save data dictionary to an npz file
+    # @params: _file_name_ with path to npz file and _data_ dict.   
+    print(f"Saving to: {file_name}")
+    np.savez_compressed(file_name, **data)
 
 def main():
 
@@ -161,11 +173,12 @@ def main():
     count        = np.empty((entries[0], total_channels), dtype="int")
 
     # Output variable-size arrays to be filled multiple values per waveform
-    pulses     = np.ndarray(shape=(entries[0], total_channels), dtype="object")
-    charges    = np.ndarray(shape=(entries[0], total_channels), dtype="object")
-    amps       = np.ndarray(shape=(entries[0], total_channels), dtype="object")
-    CFD_timing = np.ndarray(shape=(entries[0], total_channels), dtype="object")
-    threshold_timings = np.ndarray(shape=(entries[0], total_channels), dtype="object")
+    max_pulses = 30
+    pulses     = np.zeros((entries[0], total_channels, max_pulses), dtype="int")
+    charges    = np.zeros((entries[0], total_channels, max_pulses), dtype="float")
+    amps       = np.zeros((entries[0], total_channels, max_pulses), dtype="float")
+    CFD_timing = np.zeros((entries[0], total_channels, max_pulses), dtype="float")
+    threshold_timings = np.zeros((entries[0], total_channels, max_pulses), dtype="float")
 
     # Start analysis
     for branch_index in np.arange(0, len(branches)):
@@ -188,29 +201,30 @@ def main():
                     waveform -= baseline
                     
                     # Find pulse information
-                    pulse, _ = find_peaks(-1.*waveform, height=threshold)
-                    charge   = pulse_charge(waveform, pulse, 2)
-                    amp      = pulse_amplitude(waveform, pulse)
+                    pulse, _          = find_peaks(-1.*waveform, height=threshold)
+                    charge            = pulse_charge(waveform, pulse, 2)
+                    amp               = pulse_amplitude(waveform, pulse)
+                    CFD_times         = CFD_timing_extrapolation(waveform, pulse, 0., 0.4, 0.8)
+                    threshold_timing  = by_threshold(waveform, pulse, -15)
 
-                    CFD_times                              = CFD_timing_extrapolation(waveform, pulse, 0., 0.4, 0.8)
-                    threshold_timing                       = by_threshold(waveform, pulse, -15)
-                    CFD_timing[k][channel_number]        = CFD_times
-                    threshold_timings[k][channel_number] = threshold_timing
-
-                    # Save fixed-size information
+                    # # Save fixed-size information
                     baselines[k][channel_number] = baseline
                     count[k][channel_number]     = len(pulse)
                     event_number[k]              = waveforms["eventNumber"][k]
                     
                     # Save variable-size information
-                    pulses[k][channel_number]     = pulse
-                    charges[k][channel_number]    = charge
-                    amps[k][channel_number]       = amp
+                    for l in range(0, len(amp)):
+                        if len(amp) < max_pulses:
+                            pulses[k][channel_number][l]            = pulse[l]
+                            charges[k][channel_number][l]           = charge[l]
+                            amps[k][channel_number][l]              = amp[l]
+                            CFD_timing[k][channel_number][l]        = CFD_times[l]
+                            threshold_timings[k][channel_number][l] = threshold_timing[l]
 
-    # Output data to compressed files
-    print("Saving data to numpy file...")
-    np.savez_compressed(f"{final_file}", baseline=baselines, event_number=event_number, count=count, pulse=pulses, charge=charges, amplitude=amps, CFD_timing=CFD_timing, threshold_timing=threshold_timings)
-    print(f"Pulse information saved to: {final_file}.npz")
+
+    data = {"baseline":baselines, "event_number":event_number, "count":count, "pulse":pulses, "charge":charges, "amplitude":amps, "CFD_timing":CFD_timing, "threshold_timing":threshold_timings}
+    to_root(final_file, data)
+    to_npz(final_file, data)
 
 if __name__ == "__main__":
     main()
