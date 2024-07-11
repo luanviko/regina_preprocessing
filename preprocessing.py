@@ -60,41 +60,10 @@ def linear_interpolation(x0, y0, x1, y1):
     a = y0-x0*b
     return a, b
 
-# def CFD_timing_extrapolation(waveform, pulse_positions, percentage, start_rise_time=0.1, end_rise_time=0.9):
-    
-#     # Find pulse timing as a _percentage_ of rise-time amplitude. 
-#     # @params: _waveform_, _pulse_positions_, _percentage_ or rise-time amplitude
-#     # @params: optional _start_rise_time_ and _end_rise_time_ as percentages of pulse amplitude
-#     # @return: numpy array with
-
-#     CFD_samples = np.array([], dtype="int")
-    
-#     for pulse in pulse_positions:
-
-#         # Find max amplitude, and start and end of rise-time amplitude
-#         ymax    = waveform[pulse]
-#         y_start = start_rise_time*ymax
-#         y_end   = end_rise_time*ymax
-
-#         # Find positions of start and end of rise time
-#         i_start = walk_backward(waveform, y_start, pulse)
-#         i_end   = walk_backward(waveform, y_end, pulse)
-
-#         # Make linear interpolation between 
-#         a, b    = linear_interpolation(i_start, y_start, i_end, y_end)
-
-#         # If b be nan or inf, take i_start as timing
-#         if np.isinf(b) or np.isnan(b):
-#             CFD_samples = np.append(CFD_samples, [i_start], axis=None)
-
-#         # Otherwise, apply extrapolation through the baseline
-#         else: 
-#             rise_amplitude = (end_rise_time-start_rise_time)*ymax
-#             CFD_time = (percentage*rise_amplitude-a)/b
-#             CFD_samples = np.append(CFD_samples, [CFD_time], axis=None)
-
-
 def CFD_timing_extrapolation(waveform, pulse_positions, percentage, start_rise_time, end_rise_time):
+    # Extrapolate the linear fit to extract the timing of the pulse at the baseline.
+    # @parameters: waveform, position of pulses, percentage, begin and end of rise time.
+    # @return    : the timing of each pulse
     CFD_samples = np.array([], dtype="int")
     for pulse in pulse_positions:
         # Find max amplitude, and start and end of rise-time amplitude
